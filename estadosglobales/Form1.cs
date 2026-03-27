@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
+using System.Text;
 using System.Windows.Forms;
 
 namespace estadosglobales
@@ -19,6 +20,7 @@ namespace estadosglobales
 
         private ProcessState[] processes;
         private bool showTheoryOverlay = false;
+        private (int SenderId, int ReceiverId)? forcedInconsistencyChannel;
         private const int ProcessCardWidth = 160;
         private const int ProcessCardMargin = 20;
         private const int TimelinePadding = 40;
@@ -87,6 +89,7 @@ namespace estadosglobales
         {
             currentTick++;
             CheckMessageArrivals();
+            UpdateGlobalStateView();
             pnlSimulation.Invalidate();
         }
 
@@ -124,7 +127,7 @@ namespace estadosglobales
                         ProcessId = receiver.Id,
                         Color = Color.Red,
                         Description = "State Recorded",
-                        Annotation = $"P{receiver.Id}: estado local capturado = {receiver.RecordedLocalValue}",
+                        Annotation = $"{GetProcessLabel(receiver.Id)}: estado local capturado = {receiver.RecordedLocalValue}",
                         AnnotationAbove = true
                     });
 
@@ -149,6 +152,7 @@ namespace estadosglobales
             }
 
             receiver.LocalValue++;
+            receiver.LastReceivedMessage = m.Payload;
 
             if (receiver.RecordedState && !receiver.ChannelRecorded.ContainsKey(m.SenderId))
             {
@@ -158,19 +162,20 @@ namespace estadosglobales
                     ProcessId = receiver.Id,
                     Color = Color.Orange,
                     Description = "Channel Msg",
-                    Annotation = $"Mensaje de P{m.SenderId} quedó en tránsito",
+                    Annotation = $"Mensaje {m.Payload} desde {GetProcessLabel(m.SenderId)} quedó en tránsito",
                     AnnotationAbove = false
                 });
             }
             else
             {
+                receiver.ReceivedCount++;
                 nodeEvents.Add(new NodeEvent
                 {
                     Tick = m.ReceiveTime,
                     ProcessId = receiver.Id,
                     Color = Color.MediumSeaGreen,
                     Description = "Receive Msg",
-                    Annotation = $"P{receiver.Id} aplica el mensaje → estado = {receiver.LocalValue}",
+                    Annotation = $"{GetProcessLabel(receiver.Id)} recibe {m.Payload} → estado = {receiver.LocalValue}",
                     AnnotationAbove = false
                 });
             }
@@ -253,7 +258,7 @@ namespace estadosglobales
                 DrawNarrativeOverlay(g, new[]
                 {
                     "1. Genera algunos mensajes azules",
-                    "2. Presiona 'Snapshot' desde P1",
+                    "2. Presiona 'Snapshot' desde A",
                     "3. Observa cómo la línea roja captura estados"
                 }, overlayRect);
             }
@@ -303,6 +308,7 @@ namespace estadosglobales
                         g.FillEllipse(msgBrush, endX - 6, endY - 6, 12, 12);
                     }
                 }
+
             }
 
             foreach (var ev in nodeEvents)
@@ -339,7 +345,7 @@ namespace estadosglobales
             int labelWidth = 260;
             int labelHeight = 34;
             int labelX = Math.Max(timelineLeft, timelineRight - labelWidth - 20);
-            int labelY = Math.Max(15, CanvasTopPadding - labelHeight - 70);
+            int labelY = Math.Max(6, CanvasTopPadding - labelHeight - 110);
             var labelRect = new Rectangle(labelX, labelY, labelWidth, labelHeight);
             using (var shadowBrush = new SolidBrush(Color.FromArgb(80, 0, 0, 0)))
             {
@@ -452,7 +458,7 @@ namespace estadosglobales
 
             using (var titleFont = new Font("Segoe UI", 16, FontStyle.Bold))
             {
-                g.DrawString($"P{process.Id}", titleFont, Brushes.Black, cardRect.Left + 12, cardRect.Top + 6);
+                g.DrawString($"Proceso {GetProcessLabel(process.Id)}", titleFont, Brushes.Black, cardRect.Left + 12, cardRect.Top + 6);
             }
 
             using (var valueFont = new Font("Segoe UI", 11, FontStyle.Bold))
@@ -568,13 +574,16 @@ namespace estadosglobales
         {
             var sender = processes.First(p => p.Id == from);
             sender.LocalValue++;
+            sender.SentCount++;
+            sender.LastSentMessage = GetMessageToken(from, sender.LocalValue);
             var msg = new MessageEvent
             {
                 SenderId = from,
                 ReceiverId = to,
                 SendTime = currentTick,
                 ReceiveTime = currentTick + 60,
-                IsMarker = false
+                IsMarker = false,
+                Payload = sender.LastSentMessage
             };
             messages.Add(msg);
             nodeEvents.Add(new NodeEvent
@@ -583,9 +592,11 @@ namespace estadosglobales
                 ProcessId = from,
                 Color = Color.CadetBlue,
                 Description = "Send Msg",
-                Annotation = $"P{from} genera evento local → estado = {sender.LocalValue}",
+                Annotation = $"{GetProcessLabel(from)} envía {msg.Payload} → estado = {sender.LocalValue}",
                 AnnotationAbove = true
             });
+
+            UpdateGlobalStateView();
         }
 
         private void btnSnapshot_Click(object sender, EventArgs e)
@@ -603,7 +614,7 @@ namespace estadosglobales
                 ProcessId = 1,
                 Color = Color.Red,
                 Description = "State Recorded",
-                Annotation = $"P1 captura su estado local = {p1.RecordedLocalValue}",
+                Annotation = $"A captura su estado local = {p1.RecordedLocalValue}",
                 AnnotationAbove = true
             });
 
@@ -617,6 +628,151 @@ namespace estadosglobales
             btnInfo.Text = showTheoryOverlay ? "Ocultar notas visuales" : "Mostrar notas visuales";
             pnlSimulation.Invalidate();
         }
+
+        private void btnForceInconsistency_Click(object sender, EventArgs e)
+        {
+            if (forcedInconsistencyChannel.HasValue)
+            {
+                forcedInconsistencyChannel = null;
+                btnForceInconsistency.Text = "Forzar inconsistencia";
+            }
+            else
+            {
+                forcedInconsistencyChannel = (processes[0].Id, processes[1].Id);
+                btnForceInconsistency.Text = "Quitar inconsistencia";
+            }
+
+            UpdateGlobalStateView();
+            pnlSimulation.Invalidate();
+        }
+
+        private void UpdateGlobalStateView()
+        {
+            if (txtGlobalState == null || processes == null || processes.Length == 0)
+            {
+                return;
+            }
+
+            var builder = new StringBuilder();
+            builder.AppendLine("ESTADO GLOBAL");
+            builder.AppendLine();
+            builder.AppendLine("Procesos:");
+
+            var sentState = processes.ToDictionary(p => p.Id, p => p.SentCount > 0);
+            var receivedState = processes.ToDictionary(p => p.Id, p => p.ReceivedCount > 0);
+            var sentMessage = processes.ToDictionary(p => p.Id, p => p.LastSentMessage);
+            var receivedMessage = processes.ToDictionary(p => p.Id, p => p.LastReceivedMessage);
+
+            if (forcedInconsistencyChannel.HasValue)
+            {
+                sentState[forcedInconsistencyChannel.Value.SenderId] = false;
+                receivedState[forcedInconsistencyChannel.Value.ReceiverId] = true;
+                var sender = processes.First(p => p.Id == forcedInconsistencyChannel.Value.SenderId);
+                receivedMessage[forcedInconsistencyChannel.Value.ReceiverId] = GetMessageToken(sender.Id, sender.LocalValue);
+            }
+
+            foreach (var process in processes)
+            {
+                string sent = sentState[process.Id]
+                    ? string.IsNullOrWhiteSpace(sentMessage[process.Id]) ? "Mensaje enviado" : $"Mensaje enviado {sentMessage[process.Id]}"
+                    : "Mensaje sin enviar";
+                string received = receivedState[process.Id]
+                    ? string.IsNullOrWhiteSpace(receivedMessage[process.Id]) ? "Mensaje recibido" : $"Mensaje recibido {receivedMessage[process.Id]}"
+                    : "Mensaje sin recibir";
+                builder.AppendLine($"Proceso {GetProcessLabel(process.Id)}: {sent} | {received}");
+            }
+
+            builder.AppendLine();
+            builder.AppendLine("Canales:");
+
+            var channelPairs = new[]
+            {
+                new { A = 1, B = 2, Label = "AB" },
+                new { A = 2, B = 3, Label = "BC" },
+                new { A = 3, B = 1, Label = "CA" }
+            };
+
+            foreach (var channel in channelPairs)
+            {
+                var channelMessages = messages
+                    .Where(m => !m.IsMarker && !m.Delivered &&
+                                ((m.SenderId == channel.A && m.ReceiverId == channel.B) ||
+                                 (m.SenderId == channel.B && m.ReceiverId == channel.A)))
+                    .Select(m => m.Payload)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Distinct()
+                    .ToList();
+
+                if (forcedInconsistencyChannel.HasValue &&
+                    ((forcedInconsistencyChannel.Value.SenderId == channel.A && forcedInconsistencyChannel.Value.ReceiverId == channel.B) ||
+                     (forcedInconsistencyChannel.Value.SenderId == channel.B && forcedInconsistencyChannel.Value.ReceiverId == channel.A)))
+                {
+                    channelMessages.Clear();
+                }
+
+                string channelState = channelMessages.Count > 0
+                    ? $"Mensaje en camino {string.Join(", ", channelMessages)}"
+                    : "Sin mensaje";
+                builder.AppendLine($"Canal {channel.Label}: {channelState}");
+            }
+
+            bool isConsistent = true;
+            string detail = "Consistente: se respeta la causalidad.";
+
+            foreach (var sender in processes)
+            {
+                foreach (var receiver in processes.Where(p => p.Id != sender.Id))
+                {
+                    int sentCount = messages.Count(m => !m.IsMarker && m.SenderId == sender.Id && m.ReceiverId == receiver.Id);
+                    int receivedCount = messages.Count(m => !m.IsMarker && m.Delivered && m.SenderId == sender.Id && m.ReceiverId == receiver.Id);
+                    if (receivedCount > sentCount)
+                    {
+                        isConsistent = false;
+                        detail = $"Inconsistente: {GetProcessLabel(receiver.Id)} recibió más de lo enviado por {GetProcessLabel(sender.Id)}.";
+                        break;
+                    }
+                }
+
+                if (!isConsistent)
+                {
+                    break;
+                }
+            }
+
+            if (forcedInconsistencyChannel.HasValue)
+            {
+                isConsistent = false;
+                detail = $"Inconsistente forzado: {GetProcessLabel(forcedInconsistencyChannel.Value.ReceiverId)} figura como recibido sin envío previo de {GetProcessLabel(forcedInconsistencyChannel.Value.SenderId)}.";
+            }
+
+            builder.AppendLine();
+            builder.AppendLine(isConsistent ? "Resultado: ESTADO GLOBAL CONSISTENTE" : "Resultado: ESTADO GLOBAL INCONSISTENTE");
+            builder.AppendLine(detail);
+
+            txtGlobalState.Text = builder.ToString();
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            UpdateGlobalStateView();
+        }
+
+        private string GetProcessLabel(int processId)
+        {
+            return processId switch
+            {
+                1 => "A",
+                2 => "B",
+                3 => "C",
+                _ => $"P{processId}"
+            };
+        }
+
+        private string GetMessageToken(int senderId, int localState)
+        {
+            return $"{{{GetProcessLabel(senderId)}({localState})}}";
+        }
     }
 
     public class ProcessState
@@ -626,6 +782,10 @@ namespace estadosglobales
         public bool RecordedState { get; set; } = false;
         public int LocalValue { get; set; }
         public int? RecordedLocalValue { get; set; }
+        public int SentCount { get; set; }
+        public int ReceivedCount { get; set; }
+        public string LastSentMessage { get; set; }
+        public string LastReceivedMessage { get; set; }
         // True cuando el marcador de este Id ha sido recibido
         public Dictionary<int, bool> ChannelRecorded { get; set; } = new Dictionary<int, bool>();
 
@@ -649,6 +809,7 @@ namespace estadosglobales
         public long SendTime { get; set; }
         public long ReceiveTime { get; set; }
         public bool IsMarker { get; set; }
+        public string Payload { get; set; }
         public bool Delivered { get; set; } = false;
     }
 

@@ -22,6 +22,8 @@
             this.pnlSimulation = new System.Windows.Forms.Panel();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
             this.layoutControls = new System.Windows.Forms.TableLayoutPanel();
+            this.txtGlobalState = new System.Windows.Forms.TextBox();
+            this.btnForceInconsistency = new System.Windows.Forms.Button();
             this.btnInfo = new System.Windows.Forms.Button();
             this.btnP3Send = new System.Windows.Forms.Button();
             this.btnP2Send = new System.Windows.Forms.Button();
@@ -85,19 +87,48 @@
             this.layoutControls.Controls.Add(this.btnP2Send, 0, 1);
             this.layoutControls.Controls.Add(this.btnP3Send, 0, 2);
             this.layoutControls.Controls.Add(this.btnSnapshot, 0, 3);
-            this.layoutControls.Controls.Add(this.btnInfo, 0, 4);
+            this.layoutControls.Controls.Add(this.btnForceInconsistency, 0, 4);
+            this.layoutControls.Controls.Add(this.btnInfo, 0, 5);
+            this.layoutControls.Controls.Add(this.txtGlobalState, 0, 6);
             this.layoutControls.Dock = System.Windows.Forms.DockStyle.Fill;
             this.layoutControls.Location = new System.Drawing.Point(16, 32);
             this.layoutControls.Name = "layoutControls";
-            this.layoutControls.RowCount = 6;
+            this.layoutControls.RowCount = 8;
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 60F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 60F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 60F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 80F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 55F));
+            this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 55F));
+            this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 320F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.layoutControls.Size = new System.Drawing.Size(322, 752);
             this.layoutControls.TabIndex = 5;
+            // 
+            // txtGlobalState
+            // 
+            this.txtGlobalState.BackColor = System.Drawing.Color.White;
+            this.txtGlobalState.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.txtGlobalState.Location = new System.Drawing.Point(0, 370);
+            this.txtGlobalState.Margin = new System.Windows.Forms.Padding(0, 5, 0, 0);
+            this.txtGlobalState.Multiline = true;
+            this.txtGlobalState.Name = "txtGlobalState";
+            this.txtGlobalState.ReadOnly = true;
+            this.txtGlobalState.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            this.txtGlobalState.Size = new System.Drawing.Size(322, 315);
+            this.txtGlobalState.TabIndex = 6;
+            // 
+            // btnForceInconsistency
+            // 
+            this.btnForceInconsistency.BackColor = System.Drawing.Color.MistyRose;
+            this.btnForceInconsistency.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.btnForceInconsistency.Margin = new System.Windows.Forms.Padding(0, 10, 0, 0);
+            this.btnForceInconsistency.Name = "btnForceInconsistency";
+            this.btnForceInconsistency.Size = new System.Drawing.Size(322, 45);
+            this.btnForceInconsistency.TabIndex = 5;
+            this.btnForceInconsistency.Text = "Forzar inconsistencia";
+            this.btnForceInconsistency.UseVisualStyleBackColor = false;
+            this.btnForceInconsistency.Click += new System.EventHandler(this.btnForceInconsistency_Click);
             // 
             // btnInfo
             // 
@@ -118,7 +149,7 @@
             this.btnP3Send.Name = "btnP3Send";
             this.btnP3Send.Size = new System.Drawing.Size(322, 55);
             this.btnP3Send.TabIndex = 3;
-            this.btnP3Send.Text = "P3: Enviar Mensaje a P1";
+            this.btnP3Send.Text = "Proceso C: Enviar Mensaje a A";
             this.btnP3Send.UseVisualStyleBackColor = true;
             this.btnP3Send.Click += new System.EventHandler(this.btnP3Send_Click);
             // 
@@ -129,7 +160,7 @@
             this.btnP2Send.Name = "btnP2Send";
             this.btnP2Send.Size = new System.Drawing.Size(322, 55);
             this.btnP2Send.TabIndex = 2;
-            this.btnP2Send.Text = "P2: Enviar Mensaje a P3";
+            this.btnP2Send.Text = "Proceso B: Enviar Mensaje a C";
             this.btnP2Send.UseVisualStyleBackColor = true;
             this.btnP2Send.Click += new System.EventHandler(this.btnP2Send_Click);
             // 
@@ -139,7 +170,7 @@
             this.btnP1Send.Name = "btnP1Send";
             this.btnP1Send.Size = new System.Drawing.Size(322, 55);
             this.btnP1Send.TabIndex = 1;
-            this.btnP1Send.Text = "P1: Enviar Mensaje a P2";
+            this.btnP1Send.Text = "Proceso A: Enviar Mensaje a B";
             this.btnP1Send.UseVisualStyleBackColor = true;
             this.btnP1Send.Click += new System.EventHandler(this.btnP1Send_Click);
             // 
@@ -152,7 +183,7 @@
             this.btnSnapshot.Name = "btnSnapshot";
             this.btnSnapshot.Size = new System.Drawing.Size(322, 70);
             this.btnSnapshot.TabIndex = 0;
-            this.btnSnapshot.Text = "Iniciar Snapshot (Chandy-Lamport) desde P1";
+            this.btnSnapshot.Text = "Iniciar Snapshot (Chandy-Lamport) desde A";
             this.btnSnapshot.UseVisualStyleBackColor = false;
             this.btnSnapshot.Click += new System.EventHandler(this.btnSnapshot_Click);
             // 
@@ -190,6 +221,8 @@
         private System.Windows.Forms.Button btnP2Send;
         private System.Windows.Forms.Button btnP1Send;
         private System.Windows.Forms.Button btnInfo;
+        private System.Windows.Forms.Button btnForceInconsistency;
+        private System.Windows.Forms.TextBox txtGlobalState;
         private System.Windows.Forms.Timer timer1;
     }
 }
