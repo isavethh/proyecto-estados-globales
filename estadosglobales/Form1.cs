@@ -20,7 +20,11 @@ namespace estadosglobales
 
         private ProcessState[] processes;
         private bool showTheoryOverlay = false;
-        private (int SenderId, int ReceiverId)? forcedInconsistencyChannel;
+        private bool snapshotInProgress = false;
+        private bool snapshotCompleted = false;
+        private long? snapshotStartTick;
+        private int? snapshotInitiatorId;
+        private readonly Dictionary<(int From, int To), List<string>> recordedChannelMessages = new Dictionary<(int From, int To), List<string>>();
         private const int ProcessCardWidth = 160;
         private const int ProcessCardMargin = 20;
         private const int TimelinePadding = 40;
@@ -36,6 +40,10 @@ namespace estadosglobales
             InitializeComponent();
             processes = new ProcessState[] { p1, p2, p3 };
             UpdateProcessPositions();
+            if (cmbSnapshotStarter.Items.Count > 0)
+            {
+                cmbSnapshotStarter.SelectedIndex = 0;
+            }
 
             // Para evitar parpadeo
             typeof(Panel).InvokeMember("DoubleBuffered", 
@@ -110,6 +118,39 @@ namespace estadosglobales
             }
         }
 
+        private int GetSelectedSnapshotInitiatorId()
+        {
+            return cmbSnapshotStarter.SelectedItem?.ToString() switch
+            {
+                "Proceso A" => 1,
+                "Proceso B" => 2,
+                "Proceso C" => 3,
+                _ => 1
+            };
+        }
+
+        private void ResetSnapshotState()
+        {
+            snapshotInProgress = false;
+            snapshotCompleted = false;
+            snapshotStartTick = null;
+            snapshotInitiatorId = null;
+            recordedChannelMessages.Clear();
+
+            foreach (var process in processes)
+            {
+                process.RecordedState = false;
+                process.RecordedLocalValue = null;
+                process.ChannelRecorded.Clear();
+            }
+
+            messages.RemoveAll(m => m.IsMarker);
+            nodeEvents.RemoveAll(ev =>
+                ev.Description == "State Recorded" ||
+                ev.Description == "Channel Msg" ||
+                ev.Description == "Snapshot Complete");
+        }
+
         private void ProcessMessage(MessageEvent m, List<MessageEvent> newPending)
         {
             ProcessState receiver = processes.First(p => p.Id == m.ReceiverId);
@@ -118,9 +159,18 @@ namespace estadosglobales
             {
                 if (!receiver.RecordedState)
                 {
+                    if (!snapshotInProgress)
+                    {
+                        snapshotInProgress = true;
+                        snapshotCompleted = false;
+                        snapshotStartTick = currentTick;
+                        snapshotInitiatorId = m.InitiatorId ?? m.SenderId;
+                        recordedChannelMessages.Clear();
+                    }
+
                     receiver.RecordedState = true;
                     receiver.CaptureLocalState();
-                    receiver.ChannelRecorded[m.SenderId] = true;
+                    InitializeChannelRecording(receiver, m.SenderId);
                     nodeEvents.Add(new NodeEvent
                     {
                         Tick = currentTick,
@@ -139,7 +189,8 @@ namespace estadosglobales
                             ReceiverId = other.Id,
                             SendTime = currentTick,
                             ReceiveTime = currentTick + 80,
-                            IsMarker = true
+                            IsMarker = true,
+                            InitiatorId = m.InitiatorId
                         };
                         newPending.Add(marker);
                     }
@@ -148,13 +199,19 @@ namespace estadosglobales
                 {
                     receiver.ChannelRecorded[m.SenderId] = true;
                 }
+
+                TryCompleteSnapshot();
                 return;
             }
 
             receiver.LocalValue++;
-            receiver.LastReceivedMessage = m.Payload;
 
-            if (receiver.RecordedState && !receiver.ChannelRecorded.ContainsKey(m.SenderId))
+            bool shouldRecordAsInTransit = snapshotInProgress
+                && receiver.RecordedState
+                && receiver.ChannelRecorded.TryGetValue(m.SenderId, out bool markerReceived)
+                && !markerReceived;
+
+            if (shouldRecordAsInTransit)
             {
                 nodeEvents.Add(new NodeEvent
                 {
@@ -165,10 +222,20 @@ namespace estadosglobales
                     Annotation = $"Mensaje {m.Payload} desde {GetProcessLabel(m.SenderId)} quedó en tránsito",
                     AnnotationAbove = false
                 });
+
+                var channelKey = (m.SenderId, receiver.Id);
+                if (!recordedChannelMessages.TryGetValue(channelKey, out var payloads))
+                {
+                    payloads = new List<string>();
+                    recordedChannelMessages[channelKey] = payloads;
+                }
+                if (!string.IsNullOrWhiteSpace(m.Payload))
+                {
+                    payloads.Add(m.Payload);
+                }
             }
             else
             {
-                receiver.ReceivedCount++;
                 nodeEvents.Add(new NodeEvent
                 {
                     Tick = m.ReceiveTime,
@@ -184,6 +251,11 @@ namespace estadosglobales
         private int GetTickX(long tick)
         {
             return TimelineRight - (int)((currentTick - tick) * 3);
+        }
+
+        private int ClampTimelineX(long tick, int left, int right)
+        {
+            return Math.Clamp(GetTickX(tick), left, right);
         }
 
         private void pnlSimulation_Paint(object sender, PaintEventArgs e)
@@ -213,22 +285,22 @@ namespace estadosglobales
             {
                 var cutPoints = new List<Point>
                 {
-                    new Point(Math.Min(GetTickX(recNodes.First().Tick), timelineRight), overlayTop)
+                    new Point(ClampTimelineX(recNodes.First().Tick, timelineLeft, timelineRight), overlayTop)
                 };
 
                 foreach (var ev in recNodes)
                 {
-                    cutPoints.Add(new Point(Math.Min(GetTickX(ev.Tick), timelineRight), processes.First(p => p.Id == ev.ProcessId).Y));
+                    cutPoints.Add(new Point(ClampTimelineX(ev.Tick, timelineLeft, timelineRight), processes.First(p => p.Id == ev.ProcessId).Y));
                 }
 
-                cutPoints.Add(new Point(Math.Min(GetTickX(recNodes.Last().Tick), timelineRight), overlayBottom));
+                cutPoints.Add(new Point(ClampTimelineX(recNodes.Last().Tick, timelineLeft, timelineRight), overlayBottom));
 
                 var poly = new List<Point>
                 {
-                    new Point(timelineLeft - 60, overlayTop - 40)
+                    new Point(timelineLeft, overlayTop)
                 };
                 poly.AddRange(cutPoints);
-                poly.Add(new Point(timelineLeft - 60, overlayBottom + 40));
+                poly.Add(new Point(timelineLeft, overlayBottom));
 
                 using (var fillBrush = new SolidBrush(Color.FromArgb(70, 111, 207, 151)))
                 {
@@ -574,8 +646,7 @@ namespace estadosglobales
         {
             var sender = processes.First(p => p.Id == from);
             sender.LocalValue++;
-            sender.SentCount++;
-            sender.LastSentMessage = GetMessageToken(from, sender.LocalValue);
+            string payload = GetMessageToken(from, sender.LocalValue);
             var msg = new MessageEvent
             {
                 SenderId = from,
@@ -583,7 +654,7 @@ namespace estadosglobales
                 SendTime = currentTick,
                 ReceiveTime = currentTick + 60,
                 IsMarker = false,
-                Payload = sender.LastSentMessage
+                Payload = payload
             };
             messages.Add(msg);
             nodeEvents.Add(new NodeEvent
@@ -592,7 +663,7 @@ namespace estadosglobales
                 ProcessId = from,
                 Color = Color.CadetBlue,
                 Description = "Send Msg",
-                Annotation = $"{GetProcessLabel(from)} envía {msg.Payload} → estado = {sender.LocalValue}",
+                Annotation = $"{GetProcessLabel(from)} envía {payload} → estado = {sender.LocalValue}",
                 AnnotationAbove = true
             });
 
@@ -601,48 +672,72 @@ namespace estadosglobales
 
         private void btnSnapshot_Click(object sender, EventArgs e)
         {
-            if (p1.RecordedState)
+            if (snapshotInProgress)
             {
                 return;
             }
 
-            p1.RecordedState = true;
-            p1.CaptureLocalState();
+            if (snapshotCompleted || processes.Any(p => p.RecordedState))
+            {
+                ResetSnapshotState();
+            }
+
+            int initiatorId = GetSelectedSnapshotInitiatorId();
+            var initiator = processes.First(p => p.Id == initiatorId);
+
+            snapshotInProgress = true;
+            snapshotCompleted = false;
+            snapshotStartTick = currentTick;
+            snapshotInitiatorId = initiatorId;
+            recordedChannelMessages.Clear();
+
+            initiator.RecordedState = true;
+            initiator.CaptureLocalState();
+            InitializeChannelRecording(initiator, null);
             nodeEvents.Add(new NodeEvent
             {
                 Tick = currentTick,
-                ProcessId = 1,
+                ProcessId = initiatorId,
                 Color = Color.Red,
                 Description = "State Recorded",
-                Annotation = $"A captura su estado local = {p1.RecordedLocalValue}",
+                Annotation = $"{GetProcessLabel(initiatorId)} captura su estado local = {initiator.RecordedLocalValue}",
                 AnnotationAbove = true
             });
 
-            messages.Add(new MessageEvent { SenderId = 1, ReceiverId = 2, SendTime = currentTick, ReceiveTime = currentTick + 80, IsMarker = true });
-            messages.Add(new MessageEvent { SenderId = 1, ReceiverId = 3, SendTime = currentTick, ReceiveTime = currentTick + 120, IsMarker = true });
+            foreach (var other in processes.Where(p => p.Id != initiatorId))
+            {
+                messages.Add(new MessageEvent
+                {
+                    SenderId = initiatorId,
+                    ReceiverId = other.Id,
+                    SendTime = currentTick,
+                    ReceiveTime = currentTick + 80,
+                    IsMarker = true,
+                    InitiatorId = initiatorId
+                });
+            }
+
+            UpdateGlobalStateView();
+            pnlSimulation.Invalidate();
+        }
+
+        private void cmbSnapshotStarter_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            string target = GetProcessLabel(GetSelectedSnapshotInitiatorId());
+            btnSnapshot.Text = $"Iniciar Snapshot (Chandy-Lamport) desde {target}";
+        }
+
+        private void btnResetSnapshot_Click(object sender, EventArgs e)
+        {
+            ResetSnapshotState();
+            UpdateGlobalStateView();
+            pnlSimulation.Invalidate();
         }
 
         private void btnInfo_Click(object sender, EventArgs e)
         {
             showTheoryOverlay = !showTheoryOverlay;
             btnInfo.Text = showTheoryOverlay ? "Ocultar notas visuales" : "Mostrar notas visuales";
-            pnlSimulation.Invalidate();
-        }
-
-        private void btnForceInconsistency_Click(object sender, EventArgs e)
-        {
-            if (forcedInconsistencyChannel.HasValue)
-            {
-                forcedInconsistencyChannel = null;
-                btnForceInconsistency.Text = "Forzar inconsistencia";
-            }
-            else
-            {
-                forcedInconsistencyChannel = (processes[0].Id, processes[1].Id);
-                btnForceInconsistency.Text = "Quitar inconsistencia";
-            }
-
-            UpdateGlobalStateView();
             pnlSimulation.Invalidate();
         }
 
@@ -654,102 +749,124 @@ namespace estadosglobales
             }
 
             var builder = new StringBuilder();
-            builder.AppendLine("ESTADO GLOBAL");
+            builder.AppendLine("SIMULACIÓN CHANDY-LAMPORT");
             builder.AppendLine();
-            builder.AppendLine("Procesos:");
-
-            var sentState = processes.ToDictionary(p => p.Id, p => p.SentCount > 0);
-            var receivedState = processes.ToDictionary(p => p.Id, p => p.ReceivedCount > 0);
-            var sentMessage = processes.ToDictionary(p => p.Id, p => p.LastSentMessage);
-            var receivedMessage = processes.ToDictionary(p => p.Id, p => p.LastReceivedMessage);
-
-            if (forcedInconsistencyChannel.HasValue)
+            builder.AppendLine("Estado del snapshot:");
+            if (!processes.Any(p => p.RecordedState))
             {
-                sentState[forcedInconsistencyChannel.Value.SenderId] = false;
-                receivedState[forcedInconsistencyChannel.Value.ReceiverId] = true;
-                var sender = processes.First(p => p.Id == forcedInconsistencyChannel.Value.SenderId);
-                receivedMessage[forcedInconsistencyChannel.Value.ReceiverId] = GetMessageToken(sender.Id, sender.LocalValue);
+                builder.AppendLine("- No iniciado");
             }
+            else if (snapshotCompleted)
+            {
+                builder.AppendLine($"- Completado (inicio tick {snapshotStartTick})");
+            }
+            else
+            {
+                builder.AppendLine($"- En progreso (inicio tick {snapshotStartTick})");
+            }
+
+            builder.AppendLine();
+            builder.AppendLine("Estados locales por proceso:");
 
             foreach (var process in processes)
             {
-                string sent = sentState[process.Id]
-                    ? string.IsNullOrWhiteSpace(sentMessage[process.Id]) ? "Mensaje enviado" : $"Mensaje enviado {sentMessage[process.Id]}"
-                    : "Mensaje sin enviar";
-                string received = receivedState[process.Id]
-                    ? string.IsNullOrWhiteSpace(receivedMessage[process.Id]) ? "Mensaje recibido" : $"Mensaje recibido {receivedMessage[process.Id]}"
-                    : "Mensaje sin recibir";
-                builder.AppendLine($"Proceso {GetProcessLabel(process.Id)}: {sent} | {received}");
+                string snapshotLocal = process.RecordedLocalValue.HasValue
+                    ? process.RecordedLocalValue.Value.ToString()
+                    : "pendiente";
+                builder.AppendLine($"- {GetProcessLabel(process.Id)}: actual={process.LocalValue}, snapshot={snapshotLocal}");
             }
 
             builder.AppendLine();
-            builder.AppendLine("Canales:");
-
-            var channelPairs = new[]
+            builder.AppendLine("Canales entrantes (marcador recibido):");
+            foreach (var receiver in processes)
             {
-                new { A = 1, B = 2, Label = "AB" },
-                new { A = 2, B = 3, Label = "BC" },
-                new { A = 3, B = 1, Label = "CA" }
-            };
-
-            foreach (var channel in channelPairs)
-            {
-                var channelMessages = messages
-                    .Where(m => !m.IsMarker && !m.Delivered &&
-                                ((m.SenderId == channel.A && m.ReceiverId == channel.B) ||
-                                 (m.SenderId == channel.B && m.ReceiverId == channel.A)))
-                    .Select(m => m.Payload)
-                    .Where(p => !string.IsNullOrWhiteSpace(p))
-                    .Distinct()
-                    .ToList();
-
-                if (forcedInconsistencyChannel.HasValue &&
-                    ((forcedInconsistencyChannel.Value.SenderId == channel.A && forcedInconsistencyChannel.Value.ReceiverId == channel.B) ||
-                     (forcedInconsistencyChannel.Value.SenderId == channel.B && forcedInconsistencyChannel.Value.ReceiverId == channel.A)))
+                foreach (var sender in processes.Where(p => p.Id != receiver.Id))
                 {
-                    channelMessages.Clear();
+                    bool markerReceived = receiver.ChannelRecorded.TryGetValue(sender.Id, out bool received) && received;
+                    string state = receiver.RecordedState ? (markerReceived ? "cerrado" : "abierto") : "sin registrar";
+                    builder.AppendLine($"- {GetProcessLabel(sender.Id)}→{GetProcessLabel(receiver.Id)}: {state}");
                 }
-
-                string channelState = channelMessages.Count > 0
-                    ? $"Mensaje en camino {string.Join(", ", channelMessages)}"
-                    : "Sin mensaje";
-                builder.AppendLine($"Canal {channel.Label}: {channelState}");
-            }
-
-            bool isConsistent = true;
-            string detail = "Consistente: se respeta la causalidad.";
-
-            foreach (var sender in processes)
-            {
-                foreach (var receiver in processes.Where(p => p.Id != sender.Id))
-                {
-                    int sentCount = messages.Count(m => !m.IsMarker && m.SenderId == sender.Id && m.ReceiverId == receiver.Id);
-                    int receivedCount = messages.Count(m => !m.IsMarker && m.Delivered && m.SenderId == sender.Id && m.ReceiverId == receiver.Id);
-                    if (receivedCount > sentCount)
-                    {
-                        isConsistent = false;
-                        detail = $"Inconsistente: {GetProcessLabel(receiver.Id)} recibió más de lo enviado por {GetProcessLabel(sender.Id)}.";
-                        break;
-                    }
-                }
-
-                if (!isConsistent)
-                {
-                    break;
-                }
-            }
-
-            if (forcedInconsistencyChannel.HasValue)
-            {
-                isConsistent = false;
-                detail = $"Inconsistente forzado: {GetProcessLabel(forcedInconsistencyChannel.Value.ReceiverId)} figura como recibido sin envío previo de {GetProcessLabel(forcedInconsistencyChannel.Value.SenderId)}.";
             }
 
             builder.AppendLine();
-            builder.AppendLine(isConsistent ? "Resultado: ESTADO GLOBAL CONSISTENTE" : "Resultado: ESTADO GLOBAL INCONSISTENTE");
-            builder.AppendLine(detail);
+            builder.AppendLine("Mensajes normales en tránsito (actuales):");
+            var inFlightMessages = messages
+                .Where(m => !m.IsMarker && !m.Delivered)
+                .Select(m => $"- {GetProcessLabel(m.SenderId)}→{GetProcessLabel(m.ReceiverId)}: {m.Payload}")
+                .ToList();
+
+            if (inFlightMessages.Count == 0)
+            {
+                builder.AppendLine("- Ninguno");
+            }
+            else
+            {
+                foreach (var line in inFlightMessages)
+                {
+                    builder.AppendLine(line);
+                }
+            }
+
+            builder.AppendLine();
+            builder.AppendLine("Mensajes capturados en tránsito por el snapshot:");
+            if (recordedChannelMessages.Count == 0)
+            {
+                builder.AppendLine("- Ninguno");
+            }
+            else
+            {
+                foreach (var item in recordedChannelMessages.OrderBy(c => c.Key.From).ThenBy(c => c.Key.To))
+                {
+                    string channelLabel = $"{GetProcessLabel(item.Key.From)}→{GetProcessLabel(item.Key.To)}";
+                    builder.AppendLine($"- {channelLabel}: {string.Join(", ", item.Value)}");
+                }
+            }
 
             txtGlobalState.Text = builder.ToString();
+        }
+
+        private void InitializeChannelRecording(ProcessState process, int? markerSenderId)
+        {
+            process.ChannelRecorded.Clear();
+            foreach (var other in processes.Where(p => p.Id != process.Id))
+            {
+                process.ChannelRecorded[other.Id] = markerSenderId.HasValue && other.Id == markerSenderId.Value;
+            }
+        }
+
+        private void TryCompleteSnapshot()
+        {
+            if (snapshotCompleted || !snapshotInProgress)
+            {
+                return;
+            }
+
+            bool allProcessesRecorded = processes.All(p => p.RecordedState);
+            if (!allProcessesRecorded)
+            {
+                return;
+            }
+
+            bool allIncomingMarkersReceived = processes.All(process =>
+                processes.Where(other => other.Id != process.Id)
+                         .All(other => process.ChannelRecorded.TryGetValue(other.Id, out bool received) && received));
+
+            if (!allIncomingMarkersReceived)
+            {
+                return;
+            }
+
+            snapshotInProgress = false;
+            snapshotCompleted = true;
+            nodeEvents.Add(new NodeEvent
+            {
+                Tick = currentTick,
+                ProcessId = snapshotInitiatorId ?? 1,
+                Color = Color.DarkGreen,
+                Description = "Snapshot Complete",
+                Annotation = "Snapshot global completado",
+                AnnotationAbove = true
+            });
         }
 
         protected override void OnShown(EventArgs e)
@@ -773,6 +890,7 @@ namespace estadosglobales
         {
             return $"{{{GetProcessLabel(senderId)}({localState})}}";
         }
+
     }
 
     public class ProcessState
@@ -809,6 +927,7 @@ namespace estadosglobales
         public long SendTime { get; set; }
         public long ReceiveTime { get; set; }
         public bool IsMarker { get; set; }
+        public int? InitiatorId { get; set; }
         public string Payload { get; set; }
         public bool Delivered { get; set; } = false;
     }

@@ -23,7 +23,8 @@
             this.groupBox1 = new System.Windows.Forms.GroupBox();
             this.layoutControls = new System.Windows.Forms.TableLayoutPanel();
             this.txtGlobalState = new System.Windows.Forms.TextBox();
-            this.btnForceInconsistency = new System.Windows.Forms.Button();
+            this.btnResetSnapshot = new System.Windows.Forms.Button();
+            this.cmbSnapshotStarter = new System.Windows.Forms.ComboBox();
             this.btnInfo = new System.Windows.Forms.Button();
             this.btnP3Send = new System.Windows.Forms.Button();
             this.btnP2Send = new System.Windows.Forms.Button();
@@ -87,17 +88,19 @@
             this.layoutControls.Controls.Add(this.btnP2Send, 0, 1);
             this.layoutControls.Controls.Add(this.btnP3Send, 0, 2);
             this.layoutControls.Controls.Add(this.btnSnapshot, 0, 3);
-            this.layoutControls.Controls.Add(this.btnForceInconsistency, 0, 4);
-            this.layoutControls.Controls.Add(this.btnInfo, 0, 5);
-            this.layoutControls.Controls.Add(this.txtGlobalState, 0, 6);
+            this.layoutControls.Controls.Add(this.cmbSnapshotStarter, 0, 4);
+            this.layoutControls.Controls.Add(this.btnResetSnapshot, 0, 5);
+            this.layoutControls.Controls.Add(this.btnInfo, 0, 6);
+            this.layoutControls.Controls.Add(this.txtGlobalState, 0, 7);
             this.layoutControls.Dock = System.Windows.Forms.DockStyle.Fill;
             this.layoutControls.Location = new System.Drawing.Point(16, 32);
             this.layoutControls.Name = "layoutControls";
-            this.layoutControls.RowCount = 8;
+            this.layoutControls.RowCount = 9;
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 60F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 60F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 60F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 80F));
+            this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 45F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 55F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 55F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 320F));
@@ -109,7 +112,7 @@
             // 
             this.txtGlobalState.BackColor = System.Drawing.Color.White;
             this.txtGlobalState.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.txtGlobalState.Location = new System.Drawing.Point(0, 370);
+            this.txtGlobalState.Location = new System.Drawing.Point(0, 415);
             this.txtGlobalState.Margin = new System.Windows.Forms.Padding(0, 5, 0, 0);
             this.txtGlobalState.Multiline = true;
             this.txtGlobalState.Name = "txtGlobalState";
@@ -118,17 +121,33 @@
             this.txtGlobalState.Size = new System.Drawing.Size(322, 315);
             this.txtGlobalState.TabIndex = 6;
             // 
-            // btnForceInconsistency
+            // btnResetSnapshot
             // 
-            this.btnForceInconsistency.BackColor = System.Drawing.Color.MistyRose;
-            this.btnForceInconsistency.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnForceInconsistency.Margin = new System.Windows.Forms.Padding(0, 10, 0, 0);
-            this.btnForceInconsistency.Name = "btnForceInconsistency";
-            this.btnForceInconsistency.Size = new System.Drawing.Size(322, 45);
-            this.btnForceInconsistency.TabIndex = 5;
-            this.btnForceInconsistency.Text = "Forzar inconsistencia";
-            this.btnForceInconsistency.UseVisualStyleBackColor = false;
-            this.btnForceInconsistency.Click += new System.EventHandler(this.btnForceInconsistency_Click);
+            this.btnResetSnapshot.BackColor = System.Drawing.Color.Linen;
+            this.btnResetSnapshot.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.btnResetSnapshot.Margin = new System.Windows.Forms.Padding(0, 10, 0, 0);
+            this.btnResetSnapshot.Name = "btnResetSnapshot";
+            this.btnResetSnapshot.Size = new System.Drawing.Size(322, 45);
+            this.btnResetSnapshot.TabIndex = 8;
+            this.btnResetSnapshot.Text = "Reiniciar Snapshot";
+            this.btnResetSnapshot.UseVisualStyleBackColor = false;
+            this.btnResetSnapshot.Click += new System.EventHandler(this.btnResetSnapshot_Click);
+            // 
+            // cmbSnapshotStarter
+            // 
+            this.cmbSnapshotStarter.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.cmbSnapshotStarter.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.cmbSnapshotStarter.FormattingEnabled = true;
+            this.cmbSnapshotStarter.Items.AddRange(new object[] {
+            "Proceso A",
+            "Proceso B",
+            "Proceso C"});
+            this.cmbSnapshotStarter.Location = new System.Drawing.Point(0, 260);
+            this.cmbSnapshotStarter.Margin = new System.Windows.Forms.Padding(0, 5, 0, 0);
+            this.cmbSnapshotStarter.Name = "cmbSnapshotStarter";
+            this.cmbSnapshotStarter.Size = new System.Drawing.Size(322, 23);
+            this.cmbSnapshotStarter.TabIndex = 7;
+            this.cmbSnapshotStarter.SelectedIndexChanged += new System.EventHandler(this.cmbSnapshotStarter_SelectedIndexChanged);
             // 
             // btnInfo
             // 
@@ -221,8 +240,9 @@
         private System.Windows.Forms.Button btnP2Send;
         private System.Windows.Forms.Button btnP1Send;
         private System.Windows.Forms.Button btnInfo;
-        private System.Windows.Forms.Button btnForceInconsistency;
         private System.Windows.Forms.TextBox txtGlobalState;
+        private System.Windows.Forms.ComboBox cmbSnapshotStarter;
+        private System.Windows.Forms.Button btnResetSnapshot;
         private System.Windows.Forms.Timer timer1;
     }
 }
