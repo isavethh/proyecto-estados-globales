@@ -25,6 +25,7 @@
             this.txtGlobalState = new System.Windows.Forms.TextBox();
             this.btnResetSnapshot = new System.Windows.Forms.Button();
             this.cmbSnapshotStarter = new System.Windows.Forms.ComboBox();
+            this.btnPauseSimulation = new System.Windows.Forms.Button();
             this.btnInfo = new System.Windows.Forms.Button();
             this.btnP3Send = new System.Windows.Forms.Button();
             this.btnP2Send = new System.Windows.Forms.Button();
@@ -90,17 +91,19 @@
             this.layoutControls.Controls.Add(this.btnSnapshot, 0, 3);
             this.layoutControls.Controls.Add(this.cmbSnapshotStarter, 0, 4);
             this.layoutControls.Controls.Add(this.btnResetSnapshot, 0, 5);
-            this.layoutControls.Controls.Add(this.btnInfo, 0, 6);
-            this.layoutControls.Controls.Add(this.txtGlobalState, 0, 7);
+            this.layoutControls.Controls.Add(this.btnPauseSimulation, 0, 6);
+            this.layoutControls.Controls.Add(this.btnInfo, 0, 7);
+            this.layoutControls.Controls.Add(this.txtGlobalState, 0, 8);
             this.layoutControls.Dock = System.Windows.Forms.DockStyle.Fill;
             this.layoutControls.Location = new System.Drawing.Point(16, 32);
             this.layoutControls.Name = "layoutControls";
-            this.layoutControls.RowCount = 9;
+            this.layoutControls.RowCount = 10;
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 60F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 60F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 60F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 80F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 45F));
+            this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 55F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 55F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 55F));
             this.layoutControls.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 320F));
@@ -112,7 +115,7 @@
             // 
             this.txtGlobalState.BackColor = System.Drawing.Color.White;
             this.txtGlobalState.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.txtGlobalState.Location = new System.Drawing.Point(0, 415);
+            this.txtGlobalState.Location = new System.Drawing.Point(0, 470);
             this.txtGlobalState.Margin = new System.Windows.Forms.Padding(0, 5, 0, 0);
             this.txtGlobalState.Multiline = true;
             this.txtGlobalState.Name = "txtGlobalState";
@@ -148,6 +151,18 @@
             this.cmbSnapshotStarter.Size = new System.Drawing.Size(322, 23);
             this.cmbSnapshotStarter.TabIndex = 7;
             this.cmbSnapshotStarter.SelectedIndexChanged += new System.EventHandler(this.cmbSnapshotStarter_SelectedIndexChanged);
+            // 
+            // btnPauseSimulation
+            // 
+            this.btnPauseSimulation.BackColor = System.Drawing.Color.Honeydew;
+            this.btnPauseSimulation.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.btnPauseSimulation.Margin = new System.Windows.Forms.Padding(0, 10, 0, 0);
+            this.btnPauseSimulation.Name = "btnPauseSimulation";
+            this.btnPauseSimulation.Size = new System.Drawing.Size(322, 45);
+            this.btnPauseSimulation.TabIndex = 9;
+            this.btnPauseSimulation.Text = "Pausar simulación";
+            this.btnPauseSimulation.UseVisualStyleBackColor = false;
+            this.btnPauseSimulation.Click += new System.EventHandler(this.btnPauseSimulation_Click);
             // 
             // btnInfo
             // 
@@ -243,6 +258,7 @@
         private System.Windows.Forms.TextBox txtGlobalState;
         private System.Windows.Forms.ComboBox cmbSnapshotStarter;
         private System.Windows.Forms.Button btnResetSnapshot;
+        private System.Windows.Forms.Button btnPauseSimulation;
         private System.Windows.Forms.Timer timer1;
     }
 }

@@ -734,6 +734,12 @@ namespace estadosglobales
             pnlSimulation.Invalidate();
         }
 
+        private void btnPauseSimulation_Click(object sender, EventArgs e)
+        {
+            timer1.Enabled = !timer1.Enabled;
+            btnPauseSimulation.Text = timer1.Enabled ? "Pausar simulación" : "Reanudar simulación";
+        }
+
         private void btnInfo_Click(object sender, EventArgs e)
         {
             showTheoryOverlay = !showTheoryOverlay;
